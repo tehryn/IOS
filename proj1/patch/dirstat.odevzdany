@@ -1,0 +1,193 @@
+#!/bin/sh
+
+#this will change if user use -i
+reg=" cat "
+
+#checking arguments
+if [ $# -eq 0 ]
+then
+	path=$PWD
+else
+	if [ $# -eq 1 ]
+	then
+		path=$1
+	else
+		if [ $# -eq 2 ]
+		then
+			if [ "-i" = "$1" ]
+			then
+				path=$PWD
+				reg="grep -Ev "$2
+			else
+				echo "Invalid arguments" >&2
+				exit 1
+			fi
+		else
+			if [ $# -eq 3 ]
+			then
+				if [ "-i" = "$1" ]
+				then
+					path=$3
+					reg="grep -Ev "$2
+				else
+					echo "Invalid arguments" >&2
+					exit 1
+				fi
+			else
+				echo "Invalid arguments" >&2
+				exit 1
+			fi
+		fi 
+	fi	
+fi
+
+if [ "$path" = "." ]
+then
+	path=$PWD
+fi
+
+check=$(echo "$path" | $reg)
+
+if [ ! -z "$str" ]
+then
+	echo "Invalid arguments" >&2
+	exit 1
+fi
+
+#checking directory
+if [ ! -d "$path" ]; then
+	echo "Invalid path" >&2
+	exit 1
+fi
+
+echo "Root directory: $path"
+# save all files and folders into string
+str_folders=$(find "$path" -type d 2>/dev/null)
+
+cut=$(echo "$str_folders" | sed 's/[^/]//g'| sort -n | head -1 | awk '{print length}')
+cut=$(($cut+1))
+
+str_folders=$(echo "$str_folders" | cut -d "/" -f $cut- | sed -e 's/^/.\//')
+str_files=$(find "$path" -type f 2>/dev/null)
+str_files_size=$(find "$path" -type f -exec wc -c {} + 2>/dev/null)
+
+################################################################################
+# Number of folders
+dir_num=$(echo "$str_folders" | $reg | wc -l)
+dir_num=$(($dir_num+0)) #eva adds extra spaces without this
+if [ $dir_num = 0 ]
+then
+	echo "Invalid arguments" >&2
+	exit 1
+fi
+echo "Directories: $dir_num"
+################################################################################
+max_depth=$(echo "$str_folders" | $reg | sed 's/[^/]//g' | awk '{ print length }' | sort -n | tail -1)
+echo "Max depth: $max_depth"
+################################################################################
+# Averange number of files in folders
+file_num=$(find "$path" -type f 2>/dev/null | $reg | wc -l )
+file_num=$(($file_num+0))
+avr_file=$(($file_num/$dir_num))
+echo "Average no. of files: $avr_file"
+################################################################################
+# Number of files in directory (and subfolders)
+echo "All files: $file_num"
+################################################################################
+# Largest file in directory
+if [ $file_num -eq 0 ]
+then
+	file_largest="N/A"
+else
+	file_largest=$(echo "$str_files_size"| $reg | cut -d "/" -f1 | grep -Ev "[a-z]"| column -t | cut -d " " -f1 | sort -nr | head -1)
+fi
+echo "  Largest file: $file_largest"
+################################################################################
+# Average size of files in directories
+if [ $file_num -eq 0 ]
+then
+	avr_size="N/A"
+else
+	sum=$(($(echo "$str_files_size" | $reg | cut -d "/" -f1 | grep -Ev "[a-z]" | column -t | cut -d " " -f1 | tr "\n" "+" | rev | cut -d "+" -f 2- | rev )))
+	# getting average  size ind printing the result
+	avr_size=$(($sum/$file_num))
+fi
+
+echo "  Average file size: $avr_size"
+################################################################################
+# Median size of all files (the middle size) #odd number - two middle values and avr value
+if [ $file_num -eq 1 ]
+then
+	median_size=$file_largest
+else
+	if [ $file_num -le 0 ]
+	then
+		median_size="N/A"
+	else
+		if [ `echo "$file_num % 2" | bc` -eq 1 ]
+		then
+			i=$(($file_num/2))
+			i=$(($i+1))
+			median_size=$(echo "$str_files_size" | $reg | cut -d "/" -f1 | grep -Ev "[a-z]" | column -t | cut -d " " -f1 | sort -n | head -$i | tail -1)
+		else
+			i=$(($file_num/2))
+			i=$(($i+1))
+			median_size=$(($(echo "$str_files_size" | $reg | cut -d "/" -f1 | grep -Ev "[a-z]" | column -t | cut -d " " -f1 | sort -n | head -$i | tail -2 | tr "\n" "+" | rev | cut -d "+" -f 2- | rev )))
+			median_size=$(($median_size/2))
+		fi
+			
+	fi
+fi
+echo "  File size median: $median_size"
+postfix=$(echo "$str_files" | $reg |rev |cut -d '/' -f 1 | sed '/\./!d' | grep -E ".+\..+" | cut -d "." -f1 | rev | sort | uniq | tr "\n" "," | rev |cut -d "," -f 2- | rev)
+echo "File extensions: $postfix"
+	
+################################################################################
+# Statistic for files with specific postfix
+if [ $file_num -eq 0 ]
+then
+	exit 0
+else
+	i=1
+	n=$(echo "$str_files" | $reg | rev |cut -d '/' -f 1 | sed '/\./!d' | grep -E ".+\..+" | cut -d "." -f1 | rev | sort | uniq | wc -l)
+	# ^number of postfixes
+	
+	if [ $n -eq 0 ]
+	then
+		exit 0
+	fi
+	
+	while [ $i -le $n ]
+	do
+		########################################################################
+		# postfix and nuber if files
+		postfix=$(echo "$str_files" | $reg | rev |cut -d '/' -f 1 | sed '/\./!d' | grep -E ".+\..+" | cut -d "." -f1 | rev | sort | uniq | head -$i | tail -1)
+		file_num=$(echo "$str_files" | grep -E ".+\..+" | grep -E ".+\.$postfix" | $reg | wc -l )
+		echo "Files .$postfix: $file_num"
+		########################################################################
+		# largest file
+		file_largest=$(echo "$str_files_size"| $reg |  grep -E ".+\..+" | grep -E ".+\.$postfix" |cut -d "/" -f1 | grep -Ev "[a-z]"| column -t | cut -d " " -f1 | sort -nr | head -1)
+		echo "  Largest file .$postfix: $file_largest"
+		########################################################################
+		# Average size of files
+		sum=$(($(echo "$str_files_size" | grep -E ".+\..+" | grep -E ".+\.$postfix" | $reg | cut -d "/" -f1 | grep -Ev "[a-z]" | column -t | cut -d " " -f1 | tr "\n" "+" | rev | cut -d "+" -f 2- | rev )))
+		avr_size=$(($sum/$file_num))
+		echo "  Average file size .$postfix: $avr_size"
+		########################################################################
+		# Median size of files
+		if [ `echo "$file_num % 2" | bc` -eq 1 ]
+		then
+			j=$(($file_num/2))
+			j=$(($j+1))
+			median_size=$(echo "$str_files_size" | grep -E ".+\..+" | grep -E ".+\.$postfix" | $reg | cut -d "/" -f1 | grep -Ev "[a-z]" | column -t | cut -d " " -f1 | sort -n | head -$j | tail -1)
+		else
+			j=$(($file_num/2))
+			j=$(($j+1))
+			median_size=$(($(echo "$str_files_size" | grep -E ".+\..+" | grep -E ".+\.$postfix" | $reg | cut -d "/" -f1 | grep -Ev "[a-z]" | column -t | cut -d " " -f1 | sort -n | head -$j | tail -2 | tr "\n" "+" | rev | cut -d "+" -f 2- | rev )))
+			median_size=$(($median_size/2))
+		fi
+		echo "  File size median .$postfix: $median_size"
+		
+		i=$(($i+1))
+	done
+fi

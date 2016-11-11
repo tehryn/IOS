@@ -1,0 +1,34 @@
+--- dirstat.odevzdany	2016-03-28 17:00:30.000000000 +0200
++++ dirstat	2016-04-11 13:32:59.359920426 +0200
+@@ -41,14 +41,9 @@
+ 	fi	
+ fi
+ 
+-if [ "$path" = "." ]
+-then
+-	path=$PWD
+-fi
+-
+ check=$(echo "$path" | $reg)
+ 
+-if [ ! -z "$str" ]
++if [ -z "$check" ]
+ then
+ 	echo "Invalid arguments" >&2
+ 	exit 1
+@@ -61,6 +56,7 @@
+ fi
+ 
+ echo "Root directory: $path"
++path=$(readlink -f $path)
+ # save all files and folders into string
+ str_folders=$(find "$path" -type d 2>/dev/null)
+ 
+@@ -163,6 +159,7 @@
+ 		# postfix and nuber if files
+ 		postfix=$(echo "$str_files" | $reg | rev |cut -d '/' -f 1 | sed '/\./!d' | grep -E ".+\..+" | cut -d "." -f1 | rev | sort | uniq | head -$i | tail -1)
+ 		file_num=$(echo "$str_files" | grep -E ".+\..+" | grep -E ".+\.$postfix" | $reg | wc -l )
++		file_num=$(($file_num+0))
+ 		echo "Files .$postfix: $file_num"
+ 		########################################################################
+ 		# largest file
